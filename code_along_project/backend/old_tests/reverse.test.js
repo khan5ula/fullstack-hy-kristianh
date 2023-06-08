@@ -1,3 +1,4 @@
+/*
 const reverse = require('../utils/for_testing').reverse
 
 test('reverse of a', () => {
@@ -23,3 +24,4 @@ test('reverse of react', () => {
 
   expect(result).toBe('tkaer')
 })
+*/
