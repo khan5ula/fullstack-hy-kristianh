@@ -11,7 +11,7 @@ const App = () => {
   const [showAll, setShowAll] = useState(true)
   const [errorMessage, setErrorMessage] = useState(null)
 
-  const [username, setUsername] = useState('') 
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [user, setUser] = useState(null)
 
@@ -23,12 +23,25 @@ const App = () => {
       })
   }, [])
 
+  useEffect(() => {
+    const loggedUserJSON = window.localStorage.getItem('loggedNoteappUser')
+    if (loggedUserJSON) {
+      const user = JSON.parse(loggedUserJSON)
+      setUser(user)
+      noteService.setToken(user.token)
+    }
+  }, [])
+
   const handleLogin = async (event) => {
     event.preventDefault()
     try {
       const user = await loginService.login({
         username, password,
       })
+
+      window.localStorage.setItem(
+        'loggedNoteappUser', JSON.stringify(user)
+      )
 
       noteService.setToken(user.token)
       setUser(user)
@@ -51,7 +64,7 @@ const App = () => {
 
     noteService
       .create(noteObject)
-        .then(returnedNote => {
+      .then(returnedNote => {
         setNotes(notes.concat(returnedNote))
         setNewNote('')
       })
@@ -65,30 +78,30 @@ const App = () => {
     ? notes
     : notes.filter(note => note.important)
 
-   const toggleImportanceOf = id => {
-      const note = notes.find(n => n.id === id)
-      const changedNote = { ...note, important: !note.important }
-  
-      noteService
-        .update(id, changedNote).then(returnedNote => {
-          setNotes(notes.map(note => note.id !== id ? note : returnedNote))
-        })
-        .catch(error => {
-          setErrorMessage(
-            `Note '${note.content}' was already removed from server`
-          )
-          setTimeout(() => {
-            setErrorMessage(null)
-          }, 5000)
-          setNotes(notes.filter(n => n.id !== id))
-        })
-    }
+  const toggleImportanceOf = id => {
+    const note = notes.find(n => n.id === id)
+    const changedNote = { ...note, important: !note.important }
+
+    noteService
+      .update(id, changedNote).then(returnedNote => {
+        setNotes(notes.map(note => note.id !== id ? note : returnedNote))
+      })
+      .catch(error => {
+        setErrorMessage(
+          `Note '${note.content}' was already removed from server`
+        )
+        setTimeout(() => {
+          setErrorMessage(null)
+        }, 5000)
+        setNotes(notes.filter(n => n.id !== id))
+      })
+  }
 
   const loginForm = () => (
     <form onSubmit={handleLogin}>
       <div>
         username
-          <input
+        <input
           type="text"
           value={username}
           name="Username"
@@ -97,7 +110,7 @@ const App = () => {
       </div>
       <div>
         password
-          <input
+        <input
           type="password"
           value={password}
           name="Password"
@@ -105,9 +118,9 @@ const App = () => {
         />
       </div>
       <button type="submit">login</button>
-    </form>      
+    </form>
   )
-  
+
   const noteForm = () => (
     <form onSubmit={addNote}>
       <input
@@ -115,7 +128,7 @@ const App = () => {
         onChange={handleNoteChange}
       />
       <button type="submit">save</button>
-    </form>  
+    </form>
   )
 
   return (
@@ -123,21 +136,21 @@ const App = () => {
       <h1>Notes app</h1>
       <Notification message={errorMessage} />
 
-      {!user && loginForm()} 
+      {!user && loginForm()}
       {user && <div>
         <p>{user.name} logged in</p>
-          {noteForm()}
-        </div>
-      } 
- 
+        {noteForm()}
+      </div>
+      }
+
       <div>
         <button onClick={() => setShowAll(!showAll)}>
-          show {showAll ? 'important' : 'all' }
+          show {showAll ? 'important' : 'all'}
         </button>
-      </div> 
+      </div>
       <ul>
         <ul>
-          {notesToShow.map(note => 
+          {notesToShow.map(note =>
             <Note
               key={note.id}
               note={note}
