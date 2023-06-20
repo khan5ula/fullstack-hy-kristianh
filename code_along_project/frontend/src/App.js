@@ -1,74 +1,137 @@
-describe('Note ', function() {
-  beforeEach(function() {
-    cy.visit('')
-    cy.request('POST', `${Cypress.env('BACKEND')}/testing/reset`)
-    const user = {
-      name: 'Matti Luukkainen',
-      username: 'mluukkai',
-      password: 'salainen'
+import { useEffect, useRef, useState } from 'react'
+import Footer from './components/Footer'
+import LoginForm from './components/LoginForm'
+import Note from './components/Note'
+import NoteForm from './components/NoteForm'
+import Notification from './components/Notification'
+import Togglable from './components/Togglable'
+import loginService from './services/login'
+import noteService from './services/notes'
+
+const App = () => {
+  const [notes, setNotes] = useState([])
+  const [showAll, setShowAll] = useState(true)
+  const [errorMessage, setErrorMessage] = useState(null)
+
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [user, setUser] = useState(null)
+
+  const noteFormRef = useRef()
+
+  useEffect(() => {
+    noteService
+      .getAll()
+      .then(initialNotes => {
+        setNotes(initialNotes)
+      })
+  }, [])
+
+  useEffect(() => {
+    const loggedUserJSON = window.localStorage.getItem('loggedNoteappUser')
+    if (loggedUserJSON) {
+      const user = JSON.parse(loggedUserJSON)
+      setUser(user)
+      noteService.setToken(user.token)
     }
-    cy.request('POST', `${Cypress.env('BACKEND')}/users`, user)
-  })
+  }, [])
 
-  it('front page can be opened', function() {
-    cy.contains('Notes')
-    cy.contains('Note app, Department of Computer Science, University of Helsinki 2023')
-  })
-
-  it('login form can be opened', function() {
-    cy.contains('log in').click()
-    cy.get('#username').type('mluukkai')
-    cy.get('#password').type('salainen')
-    cy.get('#login-button').click()
-
-    cy.contains('Matti Luukkainen logged in')
-  })
-
-  describe('when logged in', function() {
-    beforeEach(function() {
-      cy.login({ username: 'mluukkai', password: 'salainen' })
-    })
-
-    it('a new note can be created', function() {
-      cy.contains('new note').click()
-      cy.get('input').type('a note created by cypress')
-      cy.contains('save').click()
-      cy.contains('a note created by cypress')
-    })
-
-    describe('and several notes exist', function () {
-      beforeEach(function () {
-        cy.createNote({ content: 'first note', important: false })
-        cy.createNote({ content: 'second note', important: false })
-        cy.createNote({ content: 'third note', important: false })
+  const handleLogin = async (event) => {
+    event.preventDefault()
+    try {
+      const user = await loginService.login({
+        username, password,
       })
+      noteService.setToken(user.token)
+      window.localStorage.setItem(
+        'loggedNoteappUser', JSON.stringify(user)
+      )
+      setUser(user)
+      setUsername('')
+      setPassword('')
+    } catch (exception) {
+      setErrorMessage('wrong credentials')
+      setTimeout(() => {
+        setErrorMessage(null)
+      }, 5000)
+    }
+  }
 
-      it('one of those can be made important', function () {
-        cy.contains('second note').parent().find('button').as('theButton')
-        cy.get('@theButton').click()
-        cy.get('@theButton').should('contain', 'make not important')
+  const addNote = (noteObject) => {
+    noteService
+      .create(noteObject)
+      .then(returnedNote => {
+        setNotes(notes.concat(returnedNote))
+        noteFormRef.current.toggleVisibility()
       })
-    })
-  })
+  }
 
-  it('login fails with wrong password', function() {
-    cy.contains('log in').click()
-    cy.get('#username').type('mluukkai')
-    cy.get('#password').type('wrong')
-    cy.get('#login-button').click()
+  const notesToShow = showAll
+    ? notes
+    : notes.filter(note => note.important)
 
-    cy.get('.error')
-      .should('contain', 'wrong credentials')
-      .and('have.css', 'color', 'rgb(255, 0, 0)')
-      .and('have.css', 'border-style', 'solid')
+  const toggleImportanceOf = id => {
+    const note = notes.find(n => n.id === id)
+    const changedNote = { ...note, important: !note.important }
 
-    cy.get('html').should('not.contain', 'Matti Luukkainen logged in')
-  })
+    noteService
+      .update(id, changedNote).then(returnedNote => {
+        setNotes(notes.map(note => note.id !== id ? note : returnedNote))
+      })
+      .catch(error => {
+        setErrorMessage(
+          `Note '${note.content}' was already removed from server`
+        )
+        setTimeout(() => {
+          setErrorMessage(null)
+        }, 5000)
+        setNotes(notes.filter(n => n.id !== id))
+      })
+  }
 
-  it('then example', function() {
-    cy.get('button').then( buttons => {
-      console.log('number of buttons', buttons.length)
-      cy.wrap(buttons[0]).click()
-    })
-  })
-})
+  return (
+    <div>
+      <h1>Notes app</h1>
+      <Notification message={errorMessage} />
+
+      {!user &&
+        <Togglable buttonLabel="log in">
+          <LoginForm
+            username={username}
+            password={password}
+            handleUsernameChange={({ target }) => setUsername(target.value)}
+            handlePasswordChange={({ target }) => setPassword(target.value)}
+            handleSubmit={handleLogin}
+          />
+        </Togglable>
+      }
+      {user &&
+        <div>
+          <p>{user.name} logged in</p>
+          <Togglable buttonLabel="new note" ref={noteFormRef}>
+            <NoteForm createNote={addNote} />
+          </Togglable>
+        </div>
+      }
+
+      <div>
+        <button onClick={() => setShowAll(!showAll)}>
+          show {showAll ? 'important' : 'all'}
+        </button>
+      </div>
+      <ul>
+        {notesToShow.map(note =>
+          <Note
+            key={note.id}
+            note={note}
+            toggleImportance={() => toggleImportanceOf(note.id)}
+          />
+        )}
+      </ul>
+
+      <Footer />
+    </div>
+  )
+}
+
+export default App
